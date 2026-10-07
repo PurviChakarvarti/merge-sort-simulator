@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge Sort Simulator | DAA CIA 3(b)</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f3f6fa;color:#1f2933}
+header{background:#0b3c5d;color:#fff;padding:12px 20px}
+header h1{margin:0;font-size:20px}header p{margin:2px 0 0;font-size:13px;opacity:.85}
+main{max-width:1100px;margin:0 auto;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;padding:10px;border-radius:8px;border:1px solid #d5dfe9}
+input[type=text]{padding:7px;border:1px solid #9fb3c8;border-radius:5px;width:230px;font-size:14px}
+button{padding:7px 12px;border:0;border-radius:5px;background:#1d6a96;color:#fff;font-size:14px;cursor:pointer}
+button:hover{background:#0b3c5d}button:disabled{background:#9fb3c8;cursor:default}
+button.alt{background:#5b6b79}
+.stages{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.chip{padding:5px 10px;border-radius:14px;background:#e1e8ef;font-size:13px}
+.chip.on{background:#f0b429;font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 300px;gap:12px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.panel{background:#fff;border:1px solid #d5dfe9;border-radius:8px;padding:12px}
+#tree{position:relative;overflow-x:auto;min-height:120px}
+.node{position:absolute;padding:0 2px}
+.box{display:flex;justify-content:center;border:2px solid #1d6a96;border-radius:6px;background:#dbeafe;padding:2px;gap:2px;min-height:38px}
+.c{min-width:26px;flex:1;max-width:44px;height:30px;line-height:30px;text-align:center;border-radius:4px;background:#fff;font-weight:600;font-size:14px}
+.st-base .box{background:#ffe4c4;border-color:#d9822b}
+.st-split .box{background:#e5dcfa;border-color:#7a5bd0}
+.st-merging .box{background:#ede7fb;border-color:#7a5bd0;border-style:dashed}
+.st-sorted .box,.st-final .box{background:#d3f2dc;border-color:#2f9e57}
+.st-final .box{background:#7fdc9b}
+.st-done .box{opacity:.4}
+.c.dim{opacity:.3}.c.cmp{background:#ffd43b}.c.put{background:#b197fc;color:#fff}
+#msg{font-size:16px;line-height:1.5;min-height:70px}
+#info{font-size:13px;color:#52606d;margin-top:6px}
+pre{margin:0;font-size:13px;line-height:1.6;font-family:Consolas,monospace}
+pre span{display:block;padding:0 6px;border-radius:3px}
+pre span.hl{background:#ffe08a;font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header><h1>Merge Sort Simulator</h1><p>Design and Analysis of Algorithms | CIA 3(b) | Divide and Conquer</p></header>
+<main>
+<div class="bar">
+  <input type="text" id="inp" value="38 27 43 3 9 82 10" aria-label="Array values">
+  <button id="load">Load array</button>
+  <button id="rnd" class="alt">Random</button>
+  <button id="prev" class="alt">&laquo; Previous</button>
+  <button id="next">Next &raquo;</button>
+  <button id="play">Auto play</button>
+  <button id="reset" class="alt">Reset</button>
+  <label style="font-size:13px">Speed <input type="range" id="spd" min="200" max="1800" value="900" style="direction:rtl;vertical-align:middle"></label>
+</div>
+<div class="stages" id="stages"></div>
+<div class="grid">
+  <div>
+    <div class="panel"><div id="tree"></div>
+      <div class="legend">
+        <span><i style="background:#dbeafe;border:1px solid #1d6a96"></i>Unsorted / new</span>
+        <span><i style="background:#e5dcfa;border:1px solid #7a5bd0"></i>Being split</span>
+        <span><i style="background:#ffe4c4;border:1px solid #d9822b"></i>Single element (base case)</span>
+        <span><i style="background:#ffd43b"></i>Comparing</span>
+        <span><i style="background:#b197fc"></i>Placed in merge</span>
+        <span><i style="background:#d3f2dc;border:1px solid #2f9e57"></i>Sorted</span>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px"><div id="msg"></div><div id="info"></div></div>
+  </div>
+  <div class="panel"><b>Pseudocode</b>
+<pre id="code"></pre></div>
+</div>
+</main>
+<script>
+const CODE=[
+"MERGE-SORT(A, low, high)",
+"  if low == high: return       // base case",
+"  mid = (low + high) / 2       // divide",
+"  MERGE-SORT(A, low, mid)",
+"  MERGE-SORT(A, mid+1, high)",
+"  MERGE(A, low, mid, high)",
+"MERGE: i = 0, j = 0",
+"  while both halves have items",
+"    compare L[i] and R[j]",
+"    copy the smaller to output",
+"  copy leftover items",
+"Done: array is sorted"];
+const STAGES=[["initial","1 Initial array"],["divide","2 Divide"],["base","3 Subdivide to single elements"],["compare","4 Compare"],["merge","5 Merge"],["final","6 Final sorted array"]];
+
+function record(A){
+  const n=A.length,nodes={},order=[],steps=[];let cmp=0;
+  const fmt=a=>"["+a.map(x=>x===null?"_":x).join(", ")+"]";
+  const snap=(stage,msg,line,hl={})=>steps.push({stage,msg,line,cmp,hl,nodes:JSON.parse(JSON.stringify(order.map(k=>nodes[k])))});
+  const mk=(lo,hi,d)=>{const k=lo+"-"+hi;nodes[k]={k,lo,hi,d,v:A.slice(lo,hi+1),st:"new",p:0};order.push(k);return nodes[k];};
+  function sort(lo,hi,d){
+    const N=nodes[lo+"-"+hi];
+    if(lo===hi){N.st="base";snap("base","Subarray "+fmt(N.v)+" has one element, so it is already sorted (base case).",1);return;}
+    const mid=Math.floor((lo+hi)/2);
+    N.st="split";
+    const L=mk(lo,mid,d+1),R=mk(mid+1,hi,d+1);
+    snap("divide","Divide "+fmt(N.v)+" at mid index "+mid+" into left "+fmt(L.v)+" and right "+fmt(R.v)+".",2);
+    sort(lo,mid,d+1);sort(mid+1,hi,d+1);merge(lo,mid,hi);
+  }
+  function merge(lo,mid,hi){
+    const P=nodes[lo+"-"+hi],L=nodes[lo+"-"+mid],R=nodes[(mid+1)+"-"+hi];
+    P.v=Array(hi-lo+1).fill(null);P.st="merging";L.p=0;R.p=0;
+    snap("merge","Merge sorted halves "+fmt(L.v)+" and "+fmt(R.v)+" into one sorted subarray.",5);
+    let i=0,j=0,k=0;const lh={};
+    while(i<L.v.length&&j<R.v.length){
+      cmp++;const a=L.v[i],b=R.v[j];
+      snap("compare","Compare "+a+" (left) and "+b+" (right): "+(a<=b?a+" <= "+b+", so "+a+" goes first.":b+" < "+a+", so "+b+" goes first."),8,{[L.k+":"+i]:"cmp",[R.k+":"+j]:"cmp"});
+      if(a<=b){P.v[k]=a;i++;L.p=i;}else{P.v[k]=b;j++;R.p=j;}
+      snap("merge","Place "+P.v[k]+" into position "+k+" of the merged output: "+fmt(P.v)+".",9,{[P.k+":"+k]:"put"});k++;
+    }
+    while(i<L.v.length){P.v[k]=L.v[i];i++;L.p=i;snap("merge","Right half is empty, so copy remaining "+P.v[k]+" from the left: "+fmt(P.v)+".",10,{[P.k+":"+k]:"put"});k++;}
+    while(j<R.v.length){P.v[k]=R.v[j];j++;R.p=j;snap("merge","Left half is empty, so copy remaining "+P.v[k]+" from the right: "+fmt(P.v)+".",10,{[P.k+":"+k]:"put"});k++;}
+    P.st="sorted";L.st="done";R.st="done";
+    snap("merge","Merge complete: "+fmt(P.v)+" is sorted.",5);
+  }
+  mk(0,n-1,0);
+  snap("initial","Initial unsorted array: "+fmt(A)+". Merge Sort will divide it, sort the pieces, then merge them.",0);
+  sort(0,n-1,0);
+  nodes["0-"+(n-1)].st="final";
+  snap("final","Final sorted array: "+fmt(nodes["0-"+(n-1)].v)+". Total comparisons: "+cmp+".",11);
+  return steps;
+}
+
+let steps=[],cur=0,timer=null,A=[];
+const $=id=>document.getElementById(id);
+function load(arr){stop();A=arr;steps=record(A);cur=0;render();}
+function parse(){
+  const a=$("inp").value.split(/[\s,]+/).filter(Boolean).map(Number);
+  if(a.length<2||a.length>12||a.some(isNaN)){alert("Enter 2 to 12 numbers separated by spaces or commas.");return null;}
+  return a;
+}
+function render(){
+  const s=steps[cur],n=A.length,maxD=Math.max(...s.nodes.map(x=>x.d));
+  const tree=$("tree");tree.style.height=((maxD+1)*64+6)+"px";
+  tree.innerHTML=s.nodes.map(N=>{
+    const cells=N.v.map((x,i)=>{
+      let c="c";const h=s.hl[N.k+":"+i];
+      if(h)c+=" "+h;else if(N.st==="done"||(i<N.p&&N.st!=="merging"&&N.st!=="final"&&N.st!=="sorted"))c+=" dim";
+      else if(i<N.p&&N.st==="sorted")c+=" dim";
+      return '<div class="'+c+'">'+(x===null?"":x)+'</div>';}).join("");
+    return '<div class="node st-'+N.st+'" style="top:'+(N.d*64)+'px;left:'+(N.lo/n*100)+'%;width:'+((N.hi-N.lo+1)/n*100)+'%"><div class="box">'+cells+'</div></div>';
+  }).join("");
+  $("msg").textContent=s.msg;
+  $("info").textContent="Step "+(cur+1)+" of "+steps.length+"  |  Comparisons so far: "+s.cmp+"  |  n = "+n;
+  $("stages").innerHTML=STAGES.map(x=>'<span class="chip'+(x[0]===s.stage?" on":"")+'">'+x[1]+'</span>').join("");
+  $("code").innerHTML=CODE.map((l,i)=>'<span class="'+(i===s.line?"hl":"")+'">'+l.replace(/</g,"&lt;")+'</span>').join("");
+  $("prev").disabled=cur===0;$("next").disabled=cur===steps.length-1;
+  if(cur===steps.length-1)stop();
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}$("play").textContent="Auto play";}
+function go(d){const c=cur+d;if(c>=0&&c<steps.length){cur=c;render();}}
+function play(){
+  if(timer){stop();return;}
+  if(cur===steps.length-1)cur=0;
+  $("play").textContent="Pause";render();
+  timer=setInterval(()=>go(1),+$("spd").value);
+}
+$("next").onclick=()=>{stop();go(1)};
+$("prev").onclick=()=>{stop();go(-1)};
+$("play").onclick=play;
+$("reset").onclick=()=>{stop();cur=0;render();};
+$("load").onclick=()=>{const a=parse();if(a)load(a);};
+$("rnd").onclick=()=>{const n=6+Math.floor(Math.random()*4);$("inp").value=Array.from({length:n},()=>1+Math.floor(Math.random()*99)).join(" ");load(parse());};
+$("spd").oninput=()=>{if(timer){stop();play();}};
+document.onkeydown=e=>{if(e.target.tagName==="INPUT")return;if(e.key==="ArrowRight"){stop();go(1);}if(e.key==="ArrowLeft"){stop();go(-1);}};
+load(parse());
+</script>
+</body>
+</html>
